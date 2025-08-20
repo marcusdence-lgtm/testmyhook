@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>TestMyHook</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { --bg:#fafafa; --card:#fff; --ink:#222; --muted:#666; --brand:#ff9f43; --line:#eee; }
+    body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--ink); }
+    header { padding:28px 22px 8px; max-width:1100px; margin:0 auto; }
+    h1 { margin:0 0 6px; font-size:28px; }
+    p.lead { margin:8px 0 0; color:var(--muted); }
+    .grid { display:grid; grid-template-columns: 1fr 340px; gap:22px; max-width:1100px; margin:0 auto; padding:18px 22px 40px; }
+    .card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:32px; overflow:hidden; }
+    textarea, input[type="email"], input[type="password"], select, input[type="text"] { width:100%; box-sizing:border-box; border:1px solid #ddd; border-radius:10px; padding:12px 14px; font-size:15px; }
+    @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } }
+    .muted { color: var(--muted); }
+    .hook { border:1px solid var(--line); border-radius:12px; padding:12px; margin:10px 0; background:#fff; }
+    .pill { border:1px solid var(--line); background:#fff; border-radius:999px; padding:6px 10px; font-size:14px; cursor:pointer; margin-right:6px; }
+    .pill.active { background: var(--brand); border-color: var(--brand); color:#000; }
+    .btn { background:var(--brand); border:none; border-radius:10px; padding:8px 12px; cursor:pointer; }
+    .btn:disabled { opacity:.6; cursor:default; }
+    .right { text-align:right; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>TestMyHook</h1>
+    <p class="lead">Submit hooks, get quick feedback.</p>
+  </header>
+
+  <div class="grid">
+    <main>
+      <section class="card">
+        <h3 style="margin:0 0 8px;">Submit a new hook</h3>
+        <div id="authMsg" class="muted" style="margin:8px 0 12px; display:none;">Sign in to submit hooks.</div>
+        <textarea id="hookInput" rows="3" placeholder="Your hook…"></textarea>
+        <div class="right" style="margin-top:8px;">
+          <button id="submitHookBtn" class="btn">Submit</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h3 style="margin:0;">Vote on hooks</h3>
+          <button id="refreshVoteBtn" class="btn" style="background:#eee;">Refresh</button>
+        </div>
+        <div id="voteList" class="muted" style="margin-top:8px;">Loading…</div>
+      </section>
+
+      <section class="card">
+        <h3 style="margin:0 0 8px;">Your hooks</h3>
+        <div id="yourHooks" class="muted">Loading…</div>
+      </section>
+    </main>
+
+    <aside>
+      <section class="card" id="authLoggedOut">
+        <h3 style="margin:0 0 8px;">Log in</h3>
+        <input id="email" type="email" placeholder="Email" style="margin-bottom:6px;" />
+        <input id="password" type="password" placeholder="Password" style="margin-bottom:8px;" />
+        <div class="right" style="display:flex; gap:8px; justify-content:flex-end;">
+          <button id="loginBtn" class="btn">Log in</button>
+          <button id="signupBtn" class="btn" style="background:#eee;">Sign up</button>
+        </div>
+      </section>
+
+      <section class="card" id="authLoggedIn" style="display:none;">
+        <h3 style="margin:0 0 8px;">Profile</h3>
+        <div class="muted" style="margin-bottom:8px;">Voter profile (used as metadata on each vote)</div>
+        <label class="muted" style="font-size:12px;">Industry</label>
+        <input id="industry" type="text" placeholder="e.g. SaaS" style="margin-bottom:8px;" />
+        <label class="muted" style="font-size:12px;">Experience level</label>
+        <select id="level" style="margin-bottom:12px;">
+          <option value="">—</option>
+          <option>Student</option>
+          <option>Junior</option>
+          <option>Mid</option>
+          <option>Senior</option>
+          <option>Exec</option>
+        </select>
+        <p id="authUserEmail" class="muted" style="margin:0 0 10px;">—</p>
+        <div class="right" style="display:flex; gap:8px; justify-content:flex-end;">
+          <button id="saveProfileBtn" class="btn" style="background:#eee;">Save profile</button>
+          <button id="logoutBtn" class="btn">Log out</button>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+<script>
+  window.SUPABASE_URL = "https://jsjejnosdxaedrakyfks.supabase.co";
+  window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpzamVqbm9zZHhhZWRyYWt5ZmtzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU1MTQ1NTksImV4cCI6MjA3MTA5MDU1OX0.J9sWBaNB4EFdNK3-gpzJwgAde335hc9zfAMmrjllU5Y";
+</script>
+
+<script type="module">
+  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+  const supabaseUrl = window.SUPABASE_URL || 'https://YOUR-PROJECT.supabase.co';
+  const supabaseAnonKey = window.SUPABASE_ANON_KEY || 'YOUR-ANON-KEY';
+  const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+  // UI refs
+  const voteList = document.getElementById('voteList');
+  const yourHooks = document.getElementById('yourHooks');
+  const submitHookBtn = document.getElementById('submitHookBtn');
+  const hookInput = document.getElementById('hookInput');
+
+  const loginBtn = document.getElementById('loginBtn');
+  const signupBtn = document.getElementById('signupBtn');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const emailEl = document.getElementById('email');
+  const passwordEl = document.getElementById('password');
+
+  const authMsg = document.getElementById('authMsg');
+  const authLoggedOut = document.getElementById('authLoggedOut');
+  const authLoggedIn  = document.getElementById('authLoggedIn');
+  const authUserEmail = document.getElementById('authUserEmail');
+
+  const refreshVoteBtn = document.getElementById('refreshVoteBtn');
+
+  const industryEl = document.getElementById('industry');
+  const levelEl    = document.getElementById('level');
+  const saveProfileBtn = document.getElementById('saveProfileBtn');
+
+  let userId = null;
+
+  function escapeHtml(s) {
+    return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  async function refreshAuthUI() {
+    const { data: { user } } = await supabase.auth.getUser();
+    userId = user?.id || null;
+
+    authLoggedOut.style.display = user ? 'none' : 'block';
+    authLoggedIn.style.display  = user ? 'block' : 'none';
+    authMsg.style.display       = user ? 'none' : 'block';
+    if (user) {
+      authUserEmail.textContent = user.email || '—';
+      // load profile
+      const { data } = await supabase.from('profiles').select('industry, level').eq('id', user.id).single();
+      if (data) {
+        industryEl.value = data.industry ?? '';
+        levelEl.value = data.level ?? '';
+      }
+    }
+  }
+
+  // --- helper: ensure profile exists before actions ---
+  async function ensureProfileExists() {
+    if (!userId) { alert('Please sign in.'); return false; }
+    const { data, error } = await supabase.from('profiles').select('id').eq('id', userId).maybeSingle();
+    if (error) {
+      // if RLS blocks, still show a friendly message
+      alert('Please save your profile first (fill in Industry and Experience level).');
+      return false;
+    }
+    if (!data) {
+      alert('Please save your profile first (fill in Industry and Experience level).');
+      return false;
+    }
+    return true;
+  }
+
+  // Submit a new hook
+  submitHookBtn.onclick = async () => {
+    if (!userId) { alert('Please sign in.'); return; }
+    const content = (hookInput.value || '').trim();
+    if (!content) { alert('Write a hook first.'); return; }
+    // pre-check profile
+    if (!(await ensureProfileExists())) return;
+
+    submitHookBtn.disabled = true; submitHookBtn.textContent = 'Saving…';
+    const { error } = await supabase.from('hooks').insert({ user_id: userId, content });
+    submitHookBtn.disabled = false; submitHookBtn.textContent = 'Submit';
+    if (error) {
+      if (String(error.message || '').includes('hooks_user_id_fkey')) {
+        alert('Please save your profile first (fill in Industry and Experience level).');
+      } else {
+        alert(error.message);
+      }
+      return;
+    }
+    hookInput.value = '';
+    loadYourHooks();
+    reloadVoteList();
+  };
+
+  // Save profile
+  saveProfileBtn.onclick = async () => {
+    if (!userId) { alert('Please sign in.'); return; }
+    saveProfileBtn.disabled = true; saveProfileBtn.textContent = 'Saving…';
+    const payload = { id: userId, industry: industryEl.value.trim() || null, level: levelEl.value || null };
+    const { error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
+    saveProfileBtn.disabled = false; saveProfileBtn.textContent = 'Save profile';
+    if (error) { alert(error.message); return; }
+    alert('Saved.');
+  };
+
+  // Auth
+  loginBtn.onclick = async () => {
+    loginBtn.disabled = true; loginBtn.textContent = 'Logging in…';
+    const { error } = await supabase.auth.signInWithPassword({ email: emailEl.value, password: passwordEl.value });
+    loginBtn.disabled = false; loginBtn.textContent = 'Log in';
+    if (error) alert(error.message);
+    await refreshAuthUI(); loadYourHooks(); reloadVoteList();
+  };
+  signupBtn.onclick = async () => {
+    signupBtn.disabled = true; signupBtn.textContent = 'Signing up…';
+    const { error } = await supabase.auth.signUp({ email: emailEl.value, password: passwordEl.value });
+    signupBtn.disabled = false; signupBtn.textContent = 'Sign up';
+    if (error) alert(error.message);
+    await refreshAuthUI();
+  };
+  logoutBtn.onclick = async () => { await supabase.auth.signOut(); await refreshAuthUI(); };
+
+  // Load "Your hooks"
+  async function loadYourHooks() {
+    if (!userId) { yourHooks.innerHTML = `<div class="muted">Sign in to see your hooks.</div>`; return; }
+    yourHooks.textContent = 'Loading…';
+
+    const { data: hooks, error } = await supabase
+      .from('hooks')
+      .select('id, content, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending:false })
+      .limit(50);
+
+    const { data: stats, error: sErr } = await supabase
+      .from('hook_stats')
+      .select('hook_id, avg_attention, votes_count')
+      .in('hook_id', (hooks || []).map(h=>h.id));
+
+    if (error) { yourHooks.innerHTML = `<div class="muted">${error.message}</div>`; return; }
+    if (sErr) { console.error(sErr); }
+
+    const statMap = new Map((stats||[]).map(row => [row.hook_id, row]));
+    if (!hooks?.length) { yourHooks.innerHTML = `<div class="muted">No hooks yet.</div>`; return; }
+
+    yourHooks.innerHTML = '';
+    hooks.forEach(h => {
+      const s = statMap.get(h.id) || { avg_attention: null, votes_count: 0 };
+      const att = s.avg_attention == null ? '—' : Number(s.avg_attention).toFixed(2);
+      const cnt = s.votes_count || 0;
+
+      const div = document.createElement('div');
+      div.className = 'hook';
+      div.innerHTML = `
+        <p style="margin:0 0 6px;">${escapeHtml(h.content)}</p>
+        <div class="muted" style="font-size:13px;">
+          Attention: <b>${att}</b> · (${cnt} vote${cnt === 1 ? '' : 's'})
+          ${cnt > 0 ? ` · <button class="btn" data-more style="background:none;border:none;color:var(--ink);padding:0;font-size:13px;cursor:pointer;">View more</button>` : ""}
+        </div>
+        <div class="muted" data-voter-details style="display:none; font-size:13px; margin-top:6px;"></div>
+        <button class="btn" data-delete style="background:none;border:none;color:var(--brand);padding:0;font-size:13px;cursor:pointer;">Delete</button>
+      `;
+      yourHooks.appendChild(div);
+
+      // Delete hook
+      div.querySelector('[data-delete]').onclick = async () => {
+        if (!confirm('Delete this hook? This cannot be undone.')) return;
+        const { error: dErr } = await supabase.from('hooks').delete().eq('id', h.id).eq('user_id', userId);
+        if (dErr) { alert(dErr.message); return; }
+        loadYourHooks();
+      };
+
+      // Toggle + fetch per-hook details (voters + issues)
+      if (cnt > 0) {
+        const detailsEl = div.querySelector('[data-voter-details]');
+        const btn = div.querySelector('[data-more]');
+        let cached = null;
+
+        if (btn) {
+          btn.onclick = async () => {
+            if (detailsEl.style.display === 'none') {
+              detailsEl.style.display = 'block';
+              detailsEl.textContent = "Loading…";
+              if (!cached) {
+                const { data, error } = await supabase.rpc('get_hook_voter_breakdown', { p_hook_id: h.id });
+                if (error) { detailsEl.textContent = error.message; return; }
+                cached = data || [];
+              }
+
+              const levels = cached.filter(r => r.section === 'level');
+              const inds = cached.filter(r => r.section === 'industry');
+
+              let html = "";
+              if (levels.length) {
+                html += `<div><b>By level:</b> ${levels.map(r =>
+                  `${escapeHtml(r.label)} <b>${(r.avg_overall != null ? Number(r.avg_overall).toFixed(1) : '—')}</b>
+                   (Att ${(r.avg_attention != null ? Number(r.avg_attention).toFixed(1) : '—')}, ${r.votes} vote${r.votes===1?'':'s'})`
+                ).join(' · ')}</div>`;
+              }
+              if (inds.length) {
+                html += `<div style="margin-top:4px;"><b>Top industries:</b> ${inds.map(r =>
+                  `${escapeHtml(r.label)} (${r.votes})`
+                ).join(' · ')}</div>`;
+              }
+              html += `<div style="margin-top:6px;" data-issues>Loading issues…</div>`;
+              detailsEl.innerHTML = html || "No details.";
+              // fetch issues summary (top reasons and latest comments)
+              const { data: issues, error: iErr } = await supabase.rpc('get_hook_issue_summary', { p_hook_id: h.id });
+              const issuesEl = detailsEl.querySelector('[data-issues]');
+              if (iErr) {
+                issuesEl.textContent = iErr.message;
+              } else if (!issues || (!issues.top_reasons?.length && !issues.latest_comments?.length)) {
+                issuesEl.textContent = "No issues reported.";
+              } else {
+                let ish = "";
+                if (issues.top_reasons?.length) {
+                  ish += `<div><b>Top issues:</b> ${issues.top_reasons.map(row => `${escapeHtml(row.reason)} (${row.count})`).join(' · ')}</div>`;
+                }
+                if (issues.latest_comments?.length) {
+                  ish += `<div style="margin-top:4px;"><b>Latest comments:</b> ${issues.latest_comments.map(c => `"${escapeHtml(c.comment)}"`).join(' · ')}</div>`;
+                }
+                issuesEl.innerHTML = ish;
+              }
+              btn.textContent = "Hide details";
+            } else {
+              detailsEl.style.display = 'none';
+              btn.textContent = "View more";
+            }
+          };
+        }
+      }
+    });
+  }
+
+  // Voting
+  async function reloadVoteList() {
+    const { data, error } = await supabase.rpc('get_hooks_for_voting', { p_limit: 5 });
+    if (error) { voteList.innerHTML = `<div class="muted">${error.message}</div>`; return; }
+    if (!data?.length) { voteList.innerHTML = `<div class="muted">No hooks to vote.</div>`; return; }
+
+    voteList.innerHTML = '';
+    data.forEach(h => {
+      const div = document.createElement('div');
+      div.className = 'hook';
+      div.innerHTML = `
+        <p style="margin:0 0 8px;">${escapeHtml(h.content)}</p>
+
+        <div class="muted" style="font-size:13px;">Caught my attention</div>
+        <div class="vote-row att">
+          ${[1,2,3,4,5].map(n => `<button class="pill" data-att="${n}">${n}</button>`).join('')}
+        </div>
+
+        <div class="muted" style="font-size:13px; margin-top:8px;">Mark issues (optional)</div>
+        <div class="vote-row">
+          ${['too_long','unclear','generic','clickbait','grammar','irrelevant'].map(key => `<label style="margin:6px 10px 0 0; display:inline-flex; align-items:center; gap:6px;"><input type="checkbox" data-issue="${key}"><span style="font-size:13px;">${key.replace('_',' ')}</span></label>`).join('')}
+        </div>
+        <textarea data-issue-comment placeholder="Optional comment about what didn’t work" style="margin-top:8px;"></textarea>
+
+        <div style="text-align:right; margin-top:10px;">
+          <button class="btn" data-submit>Submit Vote</button>
+        </div>
+      `;
+
+      let att = null;
+
+      div.querySelectorAll('[data-att]').forEach(btn=>{
+        btn.onclick = () => {
+          att = parseInt(btn.dataset.att,10);
+          div.querySelectorAll('[data-att]').forEach(b=>b.classList.remove('active'));
+          btn.classList.add('active');
+        };
+      });
+
+      div.querySelector('[data-submit]').onclick = async () => {
+        if (!att) return alert("Pick a score (1–5).");
+
+        // must have a profile saved first
+        if (!(await ensureProfileExists())) return;
+
+        // snapshot current profile values
+        const voter_industry = industryEl.value.trim() || null;
+        const voter_level = levelEl.value || null;
+
+        const { data: vRows, error: vErr } = await supabase.from('votes').insert({
+          hook_id: h.id,
+          user_id: userId,
+          attention_score: att,
+          voter_industry,
+          voter_level
+        }).select('id').single();
+
+        if (vErr) {
+          if (String(vErr.message || '').includes('votes_user_id_fkey')) {
+            alert('Please save your profile first (fill in Industry and Experience level).');
+          } else {
+            alert(vErr.message);
+          }
+          return;
+        }
+
+        // optional issues
+        const selected = Array.from(div.querySelectorAll('[data-issue]:checked')).map(el=>el.getAttribute('data-issue'));
+        const comment = (div.querySelector('[data-issue-comment]')?.value || '').trim();
+        if (selected.length || comment) {
+          const { error: iErr } = await supabase.from('vote_issues').insert({
+            vote_id: vRows.id,
+            hook_id: h.id,
+            user_id: userId,
+            reasons: selected,
+            comment
+          });
+          if (iErr) console.error(iErr);
+        }
+        div.remove();
+        loadYourHooks();
+      };
+
+      voteList.appendChild(div);
+    });
+  }
+
+  // Refresh button
+  refreshVoteBtn.onclick = () => reloadVoteList();
+
+  // Kick-off
+  supabase.auth.onAuthStateChange((_event, _session) => { refreshAuthUI(); loadYourHooks(); reloadVoteList(); });
+  await refreshAuthUI(); loadYourHooks(); reloadVoteList();
+</script>
+</body>
+</html>
